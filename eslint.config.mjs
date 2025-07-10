@@ -13,6 +13,8 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
+      // Tắt cảnh báo dùng <img> thay vì <Image />
+      "@next/next/no-img-element": "off",
       // tắt cảnh báo any
       "@typescript-eslint/no-explicit-any": "off",
       // tắt cảnh báo các hàm không được sử dụng
