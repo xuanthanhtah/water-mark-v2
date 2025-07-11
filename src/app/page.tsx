@@ -4,14 +4,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import { useState } from "react";
-import { X } from "lucide-react"; // Icon đóng
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DialogHandleFile from "./components/home/DialogHandleFile";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Home() {
-  const [firstImg, setFirstImg] = useState<File>();
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [imageLoaded, setImageLoaded] = useState<boolean>(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -70,11 +71,13 @@ export default function Home() {
               >
                 <X className="w-4 h-4 text-red-500" />
               </button>
+              {!imageLoaded && <Skeleton className="w-48 h-48 rounded" />}
               <Image
                 src={preview}
                 alt={`Image ${index + 1}`}
                 fill
                 className="object-cover"
+                onLoad={() => setImageLoaded(true)}
               />
             </div>
           ))}

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DialogProps } from "@/types/Home";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DialogHandleFile({ file, isOpen, close }: DialogProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -100,7 +101,7 @@ export default function DialogHandleFile({ file, isOpen, close }: DialogProps) {
   useEffect(() => {
     const wm = new Image();
     wm.onload = () => setWatermarkImage(wm);
-    wm.src = "/logo-default.png"; // Hoặc user chọn
+    wm.src = "/watermark.jpg"; // Hoặc user chọn
   }, []);
 
   // Redraw every time inputs change
@@ -162,10 +163,8 @@ export default function DialogHandleFile({ file, isOpen, close }: DialogProps) {
             style={{ maxWidth: 500, maxHeight: 500, minHeight: 300 }}
           >
             {loading && (
-              <div className="absolute inset-0 bg-white/70 z-10 flex items-center justify-center">
-                <span className="text-gray-500 animate-pulse">
-                  Đang xử lý...
-                </span>
+              <div className="absolute inset-0 z-10 bg-white/80 flex items-center justify-center">
+                <Skeleton className="w-[200px] h-[200px] rounded" />
               </div>
             )}
             <canvas

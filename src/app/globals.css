@@ -118,9 +118,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-canvas {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
