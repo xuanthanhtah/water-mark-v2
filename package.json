@@ -14,7 +14,6 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.12",
     "@types/file-saver": "^2.0.7",
-    "@types/three": "^0.178.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fabric": "5.5.2",
@@ -26,8 +25,7 @@
     "react-dom": "^19.0.0",
     "sass": "^1.89.2",
     "shadcn-ui": "^0.9.5",
-    "tailwind-merge": "^3.3.1",
-    "three": "^0.178.0"
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

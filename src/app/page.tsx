@@ -8,10 +8,13 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DialogHandleFile from "./components/home/DialogHandleFile";
 import { Skeleton } from "@/components/ui/skeleton";
+import AlertShow from "./components/home/AlertShow";
 
 export default function Home() {
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
+  const [waterMark, setWatermark] = useState<File>();
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isOpenAlert, setIsOpenAlert] = useState<boolean>(false);
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -24,6 +27,13 @@ export default function Home() {
     }));
 
     setImages((prev) => [...prev, ...newImages]);
+  };
+
+  const handleChangeWatermark = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    console.log(files);
+    setWatermark(files[0]);
   };
 
   const handleRemove = (indexToRemove: number) => {
@@ -50,11 +60,21 @@ export default function Home() {
               id="image-upload"
               type="file"
               accept="image/*"
-              onChange={handleChange}
+              onChange={handleChangeWatermark}
             />
           </div>
           <div>
-            <Button onClick={() => setIsOpen(true)}>gắn watermark</Button>
+            <Button
+              onClick={() => {
+                if (images.length > 0) {
+                  setIsOpen(true);
+                } else {
+                  setIsOpenAlert(true);
+                }
+              }}
+            >
+              gắn watermark
+            </Button>
           </div>
         </div>
 
@@ -84,10 +104,14 @@ export default function Home() {
         </div>
       </div>
       <DialogHandleFile
-        file={images}
+        files={images}
         isOpen={isOpen}
         close={() => setIsOpen(false)}
+        chooseWM={waterMark}
       />
+      {isOpenAlert && (
+        <AlertShow close={() => setIsOpenAlert(false)} isOpen={isOpenAlert} />
+      )}
     </>
   );
 }
