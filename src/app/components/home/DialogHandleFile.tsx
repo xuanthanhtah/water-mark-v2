@@ -34,7 +34,7 @@ export default function DialogHandleFile({
   const [watermark, setWatermark] = useState<HTMLImageElement | null>(null);
 
   const [opacity, setOpacity] = useState(0.5);
-  const [scale, setScale] = useState(0.3);
+  const [scale, setScale] = useState(0.2);
   const [position, setPosition] = useState<Position>("bottom-right");
 
   const [loading, setLoading] = useState(true);
@@ -357,10 +357,18 @@ export default function DialogHandleFile({
         </div>
 
         <DialogFooter className="mt-4">
-          <Button variant="secondary" onClick={close}>
+          <Button
+            variant="secondary"
+            onClick={close}
+            className=" cursor-pointer"
+          >
             Hủy
           </Button>
-          <Button onClick={handleAddWaterAll} disabled={isProcessing}>
+          <Button
+            onClick={handleAddWaterAll}
+            disabled={isProcessing}
+            className=" cursor-pointer"
+          >
             gắn toàn bộ ảnh
           </Button>
         </DialogFooter>

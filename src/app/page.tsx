@@ -10,13 +10,20 @@ import DialogHandleFile from "./components/home/DialogHandleFile";
 import { Skeleton } from "@/components/ui/skeleton";
 import AlertShow from "./components/home/AlertShow";
 import { convertHeicToJpeg } from "@/utils/convertHeicToJpeg";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function Home() {
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
   const [waterMark, setWatermark] = useState<File>();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isOpenAlert, setIsOpenAlert] = useState<boolean>(false);
-  const [imageLoaded, setImageLoaded] = useState<boolean>(false);
   const [loadedStates, setLoadedStates] = useState<boolean[]>([]);
 
   const handleChangeWatermark = async (
@@ -96,10 +103,13 @@ export default function Home() {
   };
 
   return (
-    <>
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-row gap-4">
-          <div>
+    <main className="p-6 max-w-7xl mx-auto">
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-xl">Thêm ảnh và watermark</CardTitle>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-2">
             <Label htmlFor="image-upload">Tải lên ảnh</Label>
             <Input
               id="image-upload"
@@ -109,74 +119,84 @@ export default function Home() {
               onChange={handleChange}
             />
           </div>
-          <div>
-            <Label htmlFor="image-upload">Tải lên water mark</Label>
+          <div className="space-y-2">
+            <Label htmlFor="watermark-upload">Tải lên watermark</Label>
             <Input
-              id="image-upload"
+              id="watermark-upload"
               type="file"
               accept="image/*"
               onChange={handleChangeWatermark}
             />
           </div>
-          <div>
-            <Button
-              onClick={() => {
-                if (images.length > 0) {
-                  setIsOpen(true);
-                } else {
-                  setIsOpenAlert(true);
-                }
-              }}
-            >
-              gắn watermark
-            </Button>
-          </div>
-        </div>
+        </CardContent>
+        <CardFooter className="justify-end">
+          <Button
+            disabled={images.length === 0}
+            onClick={() =>
+              images.length > 0 ? setIsOpen(true) : setIsOpenAlert(true)
+            }
+            className="cursor-pointer"
+          >
+            Gắn watermark
+          </Button>
+        </CardFooter>
+      </Card>
 
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-          {images.map(({ preview }, index) => (
-            <div
-              key={index}
-              className="relative w-48 h-48 rounded overflow-hidden shadow"
-            >
-              <button
-                type="button"
-                onClick={() => handleRemove(index)}
-                className="absolute top-1 right-1 z-10 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-1 cursor-pointer"
-              >
-                <X className="w-4 h-4 text-red-500" />
-              </button>
+      {images.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Ảnh đã tải lên</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="w-full max-h-[50vh] pr-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+                {images.map(({ preview }, index) => (
+                  <div
+                    key={index}
+                    className="relative w-full aspect-square rounded overflow-hidden shadow"
+                  >
+                    <button
+                      onClick={() => handleRemove(index)}
+                      className="absolute top-1 right-1 z-10 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-1 cursor-pointer"
+                    >
+                      <X className="w-4 h-4 text-red-500" />
+                    </button>
 
-              {!loadedStates[index] && (
-                <Skeleton className="w-48 h-48 rounded" />
-              )}
+                    {!loadedStates[index] && (
+                      <Skeleton className="absolute inset-0 w-full h-full" />
+                    )}
 
-              <Image
-                src={preview}
-                alt={`Image ${index + 1}`}
-                fill
-                className="object-cover"
-                onLoad={() =>
-                  setLoadedStates((prev) => {
-                    const updated = [...prev];
-                    updated[index] = true;
-                    return updated;
-                  })
-                }
-              />
-            </div>
-          ))}
-        </div>
-      </div>
+                    <Image
+                      src={preview}
+                      alt={`Image ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      onLoad={() =>
+                        setLoadedStates((prev) => {
+                          const updated = [...prev];
+                          updated[index] = true;
+                          return updated;
+                        })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+
       <DialogHandleFile
         files={images}
         isOpen={isOpen}
         close={() => setIsOpen(false)}
         chooseWM={waterMark}
       />
+
       {isOpenAlert && (
         <AlertShow close={() => setIsOpenAlert(false)} isOpen={isOpenAlert} />
       )}
-    </>
+    </main>
   );
 }
