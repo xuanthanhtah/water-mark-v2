@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import DialogHandleFile from "./components/home/DialogHandleFile";
 import { Skeleton } from "@/components/ui/skeleton";
 import AlertShow from "./components/home/AlertShow";
+import { convertHeicToJpeg } from "@/utils/convertHeicToJpeg";
 
 export default function Home() {
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -16,28 +17,82 @@ export default function Home() {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isOpenAlert, setIsOpenAlert] = useState<boolean>(false);
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
+  const [loadedStates, setLoadedStates] = useState<boolean[]>([]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChangeWatermark = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    const newImages = Array.from(files).map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-    }));
+    const file = files[0];
 
-    setImages((prev) => [...prev, ...newImages]);
-  };
-
-  const handleChangeWatermark = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    console.log(files);
-    setWatermark(files[0]);
+    if (
+      file.type === "image/heic" ||
+      file.name.toLowerCase().endsWith(".heic")
+    ) {
+      const converted = await convertHeicToJpeg(file);
+      if (converted) {
+        setWatermark(converted);
+      }
+    } else {
+      setWatermark(file);
+    }
   };
 
   const handleRemove = (indexToRemove: number) => {
     setImages((prev) => prev.filter((_, i) => i !== indexToRemove));
+    setLoadedStates((prev) => prev.filter((_, i) => i !== indexToRemove));
+  };
+
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const heic2any = (await import("heic2any")).default;
+    const files = e.target.files;
+    if (!files) return;
+
+    const fileArray = Array.from(files);
+
+    const convertedImages = await Promise.all(
+      fileArray.map(async (file) => {
+        if (
+          file.type === "image/heic" ||
+          file.name.toLowerCase().endsWith(".heic")
+        ) {
+          try {
+            const blob = (await heic2any({
+              blob: file,
+              toType: "image/jpeg",
+            })) as Blob;
+            const jpegFile = new File(
+              [blob],
+              file.name.replace(/\.[^/.]+$/, ".jpg"),
+              {
+                type: "image/jpeg",
+              }
+            );
+            return {
+              file: jpegFile,
+              preview: URL.createObjectURL(jpegFile),
+            };
+          } catch (err) {
+            console.error("Chuyển đổi HEIC thất bại:", err);
+            return null;
+          }
+        } else {
+          return {
+            file,
+            preview: URL.createObjectURL(file),
+          };
+        }
+      })
+    );
+
+    const validImages = convertedImages.filter(
+      (item): item is { file: File; preview: string } => item !== null
+    );
+
+    setImages((prev) => [...prev, ...validImages]);
+    setLoadedStates((prev) => [...prev, ...validImages.map(() => false)]);
   };
 
   return (
@@ -91,13 +146,23 @@ export default function Home() {
               >
                 <X className="w-4 h-4 text-red-500" />
               </button>
-              {!imageLoaded && <Skeleton className="w-48 h-48 rounded" />}
+
+              {!loadedStates[index] && (
+                <Skeleton className="w-48 h-48 rounded" />
+              )}
+
               <Image
                 src={preview}
                 alt={`Image ${index + 1}`}
                 fill
                 className="object-cover"
-                onLoad={() => setImageLoaded(true)}
+                onLoad={() =>
+                  setLoadedStates((prev) => {
+                    const updated = [...prev];
+                    updated[index] = true;
+                    return updated;
+                  })
+                }
               />
             </div>
           ))}
