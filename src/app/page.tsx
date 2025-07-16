@@ -151,6 +151,11 @@ export default function Home() {
               accept="image/*"
               onChange={handleChangeWatermark}
             />
+            <div className="text-sm text-muted-foreground">
+              <p>
+                *Nếu không upload water mark sẽ mặc định lấy logo BTN HIỆP PHÚ
+              </p>
+            </div>
           </div>
         </CardContent>
         <CardFooter className="justify-end gap-4">
