@@ -1,15 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
+import { X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Image from "next/image";
-import { useState } from "react";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import DialogHandleFile from "./components/home/DialogHandleFile";
-import { Skeleton } from "@/components/ui/skeleton";
-import AlertShow from "./components/home/AlertShow";
-import { convertHeicToJpeg } from "@/utils/convertHeicToJpeg";
 import {
   Card,
   CardContent,
@@ -18,9 +13,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import DialogHandleFile from "./components/home/DialogHandleFile";
+import AlertShow from "./components/home/AlertShow";
+import { convertHeicToJpeg } from "@/utils/convertHeicToJpeg";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
+  // Chứa cả ảnh và video, kiểu file: File, preview: string, type: "image" | "video"
+  const [files, setFiles] = useState<
+    { file: File; preview: string; type: "image" | "video" }[]
+  >([]);
   const [waterMark, setWatermark] = useState<File>();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isOpenAlert, setIsOpenAlert] = useState<boolean>(false);
@@ -48,19 +51,20 @@ export default function Home() {
   };
 
   const handleRemove = (indexToRemove: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== indexToRemove));
+    setFiles((prev) => prev.filter((_, i) => i !== indexToRemove));
     setLoadedStates((prev) => prev.filter((_, i) => i !== indexToRemove));
   };
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const heic2any = (await import("heic2any")).default;
-    const files = e.target.files;
-    if (!files) return;
+    const selectedFiles = e.target.files;
+    if (!selectedFiles) return;
 
-    const fileArray = Array.from(files);
+    const fileArray = Array.from(selectedFiles);
 
-    const convertedImages = await Promise.all(
+    const convertedFiles = await Promise.all(
       fileArray.map(async (file) => {
+        // Xử lý ảnh HEIC
         if (
           file.type === "image/heic" ||
           file.name.toLowerCase().endsWith(".heic")
@@ -80,41 +84,61 @@ export default function Home() {
             return {
               file: jpegFile,
               preview: URL.createObjectURL(jpegFile),
+              type: "image" as const,
             };
           } catch (err) {
             console.error("Chuyển đổi HEIC thất bại:", err);
             return null;
           }
-        } else {
+        }
+        // Nếu file là video, preview dùng URL, type = "video"
+        else if (file.type.startsWith("video/")) {
           return {
             file,
             preview: URL.createObjectURL(file),
+            type: "video" as const,
           };
+        }
+        // Là ảnh bình thường
+        else if (file.type.startsWith("image/")) {
+          return {
+            file,
+            preview: URL.createObjectURL(file),
+            type: "image" as const,
+          };
+        } else {
+          // Bỏ qua các file không phải image/video nếu muốn
+          return null;
         }
       })
     );
 
-    const validImages = convertedImages.filter(
-      (item): item is { file: File; preview: string } => item !== null
+    const validFiles = convertedFiles.filter(
+      (
+        item
+      ): item is { file: File; preview: string; type: "image" | "video" } =>
+        item !== null
     );
 
-    setImages((prev) => [...prev, ...validImages]);
-    setLoadedStates((prev) => [...prev, ...validImages.map(() => false)]);
+    setFiles((prev) => [...prev, ...validFiles]);
+    setLoadedStates((prev) => [...prev, ...validFiles.map(() => false)]);
   };
 
   return (
     <main className="p-6 max-w-7xl mx-auto">
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-xl">Thêm ảnh và watermark</CardTitle>
+          <CardTitle className="text-xl">
+            Thêm ảnh, video và watermark
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="image-upload">Tải lên ảnh</Label>
+            <Label htmlFor="file-upload">Tải lên ảnh hoặc video</Label>
             <Input
-              id="image-upload"
+              id="file-upload"
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               onChange={handleChange}
             />
@@ -131,9 +155,9 @@ export default function Home() {
         </CardContent>
         <CardFooter className="justify-end">
           <Button
-            disabled={images.length === 0}
+            disabled={files.length === 0}
             onClick={() =>
-              images.length > 0 ? setIsOpen(true) : setIsOpenAlert(true)
+              files.length > 0 ? setIsOpen(true) : setIsOpenAlert(true)
             }
             className="cursor-pointer"
           >
@@ -142,15 +166,15 @@ export default function Home() {
         </CardFooter>
       </Card>
 
-      {images.length > 0 && (
+      {files.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Ảnh đã tải lên</CardTitle>
+            <CardTitle className="text-lg">Tệp đã tải lên</CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="w-full max-h-[50vh] pr-2">
+            <ScrollArea className="w-full h-fit pr-2">
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-                {images.map(({ preview }, index) => (
+                {files.map(({ preview, type }, index) => (
                   <div
                     key={index}
                     className="relative w-full aspect-square rounded overflow-hidden shadow"
@@ -166,19 +190,34 @@ export default function Home() {
                       <Skeleton className="absolute inset-0 w-full h-full" />
                     )}
 
-                    <Image
-                      src={preview}
-                      alt={`Image ${index + 1}`}
-                      fill
-                      className="object-cover"
-                      onLoad={() =>
-                        setLoadedStates((prev) => {
-                          const updated = [...prev];
-                          updated[index] = true;
-                          return updated;
-                        })
-                      }
-                    />
+                    {type === "image" ? (
+                      <Image
+                        src={preview}
+                        alt={`Image ${index + 1}`}
+                        fill
+                        className="object-cover"
+                        onLoad={() =>
+                          setLoadedStates((prev) => {
+                            const updated = [...prev];
+                            updated[index] = true;
+                            return updated;
+                          })
+                        }
+                      />
+                    ) : (
+                      <video
+                        src={preview}
+                        controls
+                        className="w-full h-full object-cover rounded"
+                        onLoadedData={() =>
+                          setLoadedStates((prev) => {
+                            const updated = [...prev];
+                            updated[index] = true;
+                            return updated;
+                          })
+                        }
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -188,7 +227,7 @@ export default function Home() {
       )}
 
       <DialogHandleFile
-        files={images}
+        files={files}
         isOpen={isOpen}
         close={() => setIsOpen(false)}
         chooseWM={waterMark}
