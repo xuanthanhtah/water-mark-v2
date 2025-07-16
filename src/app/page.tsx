@@ -153,7 +153,14 @@ export default function Home() {
             />
           </div>
         </CardContent>
-        <CardFooter className="justify-end">
+        <CardFooter className="justify-end gap-4">
+          <Button
+            disabled={files.length === 0}
+            onClick={() => setFiles([])}
+            className="cursor-pointer "
+          >
+            Xóa tất cả
+          </Button>
           <Button
             disabled={files.length === 0}
             onClick={() =>
