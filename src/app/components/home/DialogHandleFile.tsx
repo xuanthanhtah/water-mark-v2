@@ -262,7 +262,7 @@ export default function DialogHandleFile({
     wm.onload = () => {
       setWatermark(wm);
     };
-    wm.src = chooseWM ? URL.createObjectURL(chooseWM) : "/watermark.jpg";
+    wm.src = chooseWM ? URL.createObjectURL(chooseWM) : "/watermark.png";
 
     // Reset state before loading new media
     setImage(null);
