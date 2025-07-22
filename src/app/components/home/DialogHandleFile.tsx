@@ -529,19 +529,37 @@ export default function DialogHandleFile({
                 wmHeight
               );
               ctx.restore();
+              const format = file.type.startsWith("image/")
+                ? file.type
+                : "image/jpeg";
+              const extension = format.split("/")[1];
 
               canvas.toBlob(
                 (blob) => {
                   if (blob) {
-                    zip.file(`image_${i + 1}.jpg`, blob);
+                    zip.file(`image_${i + 1}.${extension}`, blob);
+                    URL.revokeObjectURL(img.src);
+                    processedFiles++;
+                    setProgress((processedFiles / totalFiles) * 100);
+                    resolve();
+                  } else {
+                    canvas.toBlob(
+                      (fallbackBlob) => {
+                        if (fallbackBlob) {
+                          zip.file(`image_${i + 1}.jpg`, fallbackBlob);
+                        }
+                        URL.revokeObjectURL(img.src);
+                        processedFiles++;
+                        setProgress((processedFiles / totalFiles) * 100);
+                        resolve();
+                      },
+                      "image/jpeg",
+                      1
+                    );
                   }
-                  URL.revokeObjectURL(img.src);
-                  processedFiles++;
-                  setProgress((processedFiles / totalFiles) * 100);
-                  resolve();
                 },
-                "image/jpeg",
-                0.95
+                format,
+                1
               );
             };
             img.onerror = () => {
