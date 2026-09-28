@@ -1,5 +1,6 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircleIcon } from "lucide-react";
+import { AlertShowProps as AlertProps } from "@/types/watermark";
 
 export default function AlertShow({ isOpen, close }: AlertProps) {
   if (!isOpen) return null;

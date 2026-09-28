@@ -2,45 +2,46 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+  X,
+  Sparkles,
+  Layers,
+  Trash2,
+  Play,
+  ImageIcon,
+  VideoIcon,
+  Shield,
+  Zap,
+  HardDrive,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import DialogHandleFile from "./components/home/DialogHandleFile";
 import AlertShow from "./components/home/AlertShow";
+import MediaDropzone from "@/components/home/MediaDropzone";
+import WatermarkDropzone from "@/components/home/WatermarkDropzone";
 import { convertHeicToJpeg } from "@/utils/convertHeicToJpeg";
-import { Button } from "@/components/ui/button";
+import { MediaFileItem } from "@/types/watermark";
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
 
 export default function Home() {
-  // Chứa cả ảnh và video, kiểu file: File, preview: string, type: "image" | "video"
-  const [files, setFiles] = useState<
-    { file: File; preview: string; type: "image" | "video" }[]
-  >([]);
-  const [waterMark, setWatermark] = useState<File>();
+  const [files, setFiles] = useState<MediaFileItem[]>([]);
+  const [waterMark, setWatermark] = useState<File | undefined>();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isOpenAlert, setIsOpenAlert] = useState<boolean>(false);
   const [loadedStates, setLoadedStates] = useState<boolean[]>([]);
+  const [isConvertingHeic, setIsConvertingHeic] = useState(false);
 
-  const handleChangeWatermark = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-
-    if (
-      file.type === "image/heic" ||
-      file.name.toLowerCase().endsWith(".heic")
-    ) {
+  const handleWatermarkSelected = async (file: File) => {
+    if (file.type === "image/heic" || file.name.toLowerCase().endsWith(".heic")) {
       const converted = await convertHeicToJpeg(file);
       if (converted) {
         setWatermark(converted);
@@ -51,203 +52,313 @@ export default function Home() {
   };
 
   const handleRemove = (indexToRemove: number) => {
+    const item = files[indexToRemove];
+    if (item && item.preview) {
+      URL.revokeObjectURL(item.preview);
+    }
     setFiles((prev) => prev.filter((_, i) => i !== indexToRemove));
     setLoadedStates((prev) => prev.filter((_, i) => i !== indexToRemove));
   };
 
-  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const heic2any = (await import("heic2any")).default;
-    const selectedFiles = e.target.files;
-    if (!selectedFiles) return;
+  const handleClearAll = () => {
+    files.forEach((item) => {
+      if (item.preview) {
+        URL.revokeObjectURL(item.preview);
+      }
+    });
+    setFiles([]);
+    setLoadedStates([]);
+  };
 
-    const fileArray = Array.from(selectedFiles);
-
-    const convertedFiles = await Promise.all(
-      fileArray.map(async (file) => {
-        // Xử lý ảnh HEIC
+  const handleFilesSelected = async (incomingFiles: File[]) => {
+    setIsConvertingHeic(true);
+    const convertedItems = await Promise.all(
+      incomingFiles.map(async (file) => {
+        // HEIC conversion
         if (
           file.type === "image/heic" ||
           file.name.toLowerCase().endsWith(".heic")
         ) {
           try {
-            const blob = (await heic2any({
-              blob: file,
-              toType: "image/jpeg",
-            })) as Blob;
-            const jpegFile = new File(
-              [blob],
-              file.name.replace(/\.[^/.]+$/, ".jpg"),
-              {
-                type: "image/jpeg",
-              }
-            );
-            return {
-              file: jpegFile,
-              preview: URL.createObjectURL(jpegFile),
-              type: "image" as const,
-            };
+            const converted = await convertHeicToJpeg(file);
+            if (converted) {
+              return {
+                file: converted,
+                preview: URL.createObjectURL(converted),
+                type: "image" as const,
+              };
+            }
           } catch (err) {
             console.error("Chuyển đổi HEIC thất bại:", err);
             return null;
           }
-        }
-        // Nếu file là video, preview dùng URL, type = "video"
-        else if (file.type.startsWith("video/")) {
+        } else if (file.type.startsWith("video/")) {
           return {
             file,
             preview: URL.createObjectURL(file),
             type: "video" as const,
           };
-        }
-        // Là ảnh bình thường
-        else if (file.type.startsWith("image/")) {
+        } else if (file.type.startsWith("image/")) {
           return {
             file,
             preview: URL.createObjectURL(file),
             type: "image" as const,
           };
-        } else {
-          // Bỏ qua các file không phải image/video nếu muốn
-          return null;
         }
+        return null;
       })
     );
 
-    const validFiles = convertedFiles.filter(
-      (
-        item
-      ): item is { file: File; preview: string; type: "image" | "video" } =>
-        item !== null
+    const validItems = convertedItems.filter(
+      (item): item is MediaFileItem => item !== null
     );
 
-    setFiles((prev) => [...prev, ...validFiles]);
-    setLoadedStates((prev) => [...prev, ...validFiles.map(() => false)]);
+    setFiles((prev) => [...prev, ...validItems]);
+    setLoadedStates((prev) => [...prev, ...validItems.map(() => false)]);
+    setIsConvertingHeic(false);
   };
 
+  // Stats calculation
+  const totalBytes = files.reduce((acc, f) => acc + f.file.size, 0);
+  const imageCount = files.filter((f) => f.type === "image").length;
+  const videoCount = files.filter((f) => f.type === "video").length;
+
   return (
-    <main className="p-6 max-w-7xl mx-auto">
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-xl">
-            Thêm ảnh, video và watermark
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-4">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 text-foreground py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Hero Header */}
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border/60 pb-6">
           <div className="space-y-2">
-            <Label htmlFor="file-upload">Tải lên ảnh hoặc video</Label>
-            <Input
-              id="file-upload"
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              onChange={handleChange}
-            />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Watermark Studio v2.0 • Pro Edition</span>
+            </div>
+
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-primary bg-clip-text text-transparent">
+              Đóng Dấu Ảnh & Video Chuyên Nghiệp
+            </h1>
+
+            <p className="text-sm sm:text-base text-muted-foreground max-w-2xl">
+              Bảo vệ bản quyền truyền thông với logo trong suốt hoặc chữ nghệ thuật. Hỗ trợ hàng loạt ảnh, video HD, chuyển đổi HEIC tức thì và xử lý 100% trên máy tính của bạn.
+            </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="watermark-upload">Tải lên watermark</Label>
-            <Input
-              id="watermark-upload"
-              type="file"
-              accept="image/*"
-              onChange={handleChangeWatermark}
-            />
-            <div className="text-sm text-muted-foreground">
-              <p>
-                *Nếu không upload water mark sẽ mặc định lấy logo BTN HIỆP PHÚ
+
+          {/* Quick value badges */}
+          <div className="hidden lg:flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5 bg-card px-3 py-1.5 rounded-lg border shadow-xs">
+              <Shield className="w-4 h-4 text-emerald-500" /> Bản quyền an toàn
+            </span>
+            <span className="flex items-center gap-1.5 bg-card px-3 py-1.5 rounded-lg border shadow-xs">
+              <Zap className="w-4 h-4 text-amber-500" /> Tốc độ xử lý cao
+            </span>
+            <span className="flex items-center gap-1.5 bg-card px-3 py-1.5 rounded-lg border shadow-xs">
+              <HardDrive className="w-4 h-4 text-blue-500" /> Offline riêng tư
+            </span>
+          </div>
+        </header>
+
+        {/* Upload Studio Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Main Media Dropzone */}
+          <div className="lg:col-span-7 flex flex-col justify-between">
+            <div className="mb-2">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Layers className="w-4 h-4 text-primary" />
+                <span>1. Tải lên tệp phương tiện (Ảnh hoặc Video)</span>
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Kéo thả nhiều ảnh, video từ máy tính hoặc bấm để chọn.
               </p>
             </div>
+
+            <MediaDropzone
+              onFilesSelected={handleFilesSelected}
+              disabled={isConvertingHeic}
+            />
           </div>
-        </CardContent>
-        <CardFooter className="justify-end gap-4">
-          <Button
-            disabled={files.length === 0}
-            onClick={() => setFiles([])}
-            className="cursor-pointer "
-          >
-            Xóa tất cả
-          </Button>
-          <Button
-            disabled={files.length === 0}
-            onClick={() =>
-              files.length > 0 ? setIsOpen(true) : setIsOpenAlert(true)
-            }
-            className="cursor-pointer"
-          >
-            Gắn watermark
-          </Button>
-        </CardFooter>
-      </Card>
 
-      {files.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Tệp đã tải lên</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="w-full h-fit pr-2">
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-                {files.map(({ preview, type }, index) => (
-                  <div
-                    key={index}
-                    className="relative w-full aspect-square rounded overflow-hidden shadow"
-                  >
-                    <button
-                      onClick={() => handleRemove(index)}
-                      className="absolute top-1 right-1 z-10 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-1 cursor-pointer"
-                    >
-                      <X className="w-4 h-4 text-red-500" />
-                    </button>
+          {/* Watermark Config Box */}
+          <div className="lg:col-span-5 flex flex-col justify-between">
+            <div className="mb-2">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>2. Chọn Logo Watermark (Tùy chọn)</span>
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Mặc định dùng logo mẫu, hoặc tải file PNG/JPG của riêng bạn.
+              </p>
+            </div>
 
-                    {!loadedStates[index] && (
-                      <Skeleton className="absolute inset-0 w-full h-full" />
-                    )}
+            <WatermarkDropzone
+              watermarkFile={waterMark}
+              onWatermarkSelected={handleWatermarkSelected}
+              onWatermarkCleared={() => setWatermark(undefined)}
+            />
+          </div>
+        </div>
 
-                    {type === "image" ? (
-                      <Image
-                        src={preview}
-                        alt={`Image ${index + 1}`}
-                        fill
-                        className="object-cover"
-                        onLoad={() =>
-                          setLoadedStates((prev) => {
-                            const updated = [...prev];
-                            updated[index] = true;
-                            return updated;
-                          })
-                        }
-                      />
-                    ) : (
-                      <video
-                        src={preview}
-                        controls
-                        className="w-full h-full object-cover rounded"
-                        onLoadedData={() =>
-                          setLoadedStates((prev) => {
-                            const updated = [...prev];
-                            updated[index] = true;
-                            return updated;
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                ))}
+        {/* Floating / Sticky Action Bar when files exist */}
+        {files.length > 0 && (
+          <div className="sticky top-4 z-30 bg-card/90 backdrop-blur-md border border-border/80 rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-xs font-semibold">
+                Đã nạp {files.length} tệp ({imageCount > 0 && `${imageCount} ảnh`}
+                {imageCount > 0 && videoCount > 0 && ", "}
+                {videoCount > 0 && `${videoCount} video`})
               </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      )}
 
-      <DialogHandleFile
-        files={files}
-        isOpen={isOpen}
-        close={() => setIsOpen(false)}
-        chooseWM={waterMark}
-      />
+              <div className="text-xs text-muted-foreground font-mono">
+                Tổng dung lượng: {formatFileSize(totalBytes)}
+              </div>
+            </div>
 
-      {isOpenAlert && (
-        <AlertShow close={() => setIsOpenAlert(false)} isOpen={isOpenAlert} />
-      )}
+            <div className="flex items-center gap-2.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearAll}
+                className="text-xs text-muted-foreground hover:text-destructive h-9"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                Xóa tất cả
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={() => setIsOpen(true)}
+                className="h-9 px-5 font-semibold gap-2 shadow-md shadow-primary/20"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Mở Studio Đóng Dấu ({files.length})</span>
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Media Gallery / Grid Showcase */}
+        {files.length > 0 ? (
+          <Card className="border-border/60 shadow-xs">
+            <CardContent className="p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {files.map(({ file, preview, type }, index) => {
+                  const ext = file.name.split(".").pop()?.toUpperCase() || type;
+                  return (
+                    <div
+                      key={index}
+                      className="group relative w-full aspect-square rounded-xl overflow-hidden shadow-xs border bg-muted/30 transition-all hover:shadow-md hover:border-primary/50"
+                    >
+                      {/* Top Badges */}
+                      <div className="absolute top-2 left-2 z-10 flex items-center gap-1 pointer-events-none">
+                        <span className="bg-black/70 backdrop-blur-xs text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">
+                          {ext}
+                        </span>
+                      </div>
+
+                      {/* Remove Button */}
+                      <button
+                        onClick={() => handleRemove(index)}
+                        title="Xóa tệp này"
+                        className="absolute top-2 right-2 z-20 bg-black/60 hover:bg-red-600 text-white rounded-full p-1.5 opacity-90 transition-all shadow-sm cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Skeleton loader */}
+                      {!loadedStates[index] && (
+                        <Skeleton className="absolute inset-0 w-full h-full" />
+                      )}
+
+                      {/* Thumbnail media */}
+                      {type === "image" ? (
+                        <Image
+                          src={preview}
+                          alt={file.name}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          onLoad={() =>
+                            setLoadedStates((prev) => {
+                              const updated = [...prev];
+                              updated[index] = true;
+                              return updated;
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="relative w-full h-full">
+                          <video
+                            src={preview}
+                            className="w-full h-full object-cover"
+                            onLoadedData={() =>
+                              setLoadedStates((prev) => {
+                                const updated = [...prev];
+                                updated[index] = true;
+                                return updated;
+                              })
+                            }
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/25 pointer-events-none">
+                            <div className="w-9 h-9 rounded-full bg-white/80 text-black flex items-center justify-center shadow-md">
+                              <Play className="w-4 h-4 ml-0.5" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bottom file info overlay */}
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 pt-4 text-white pointer-events-none">
+                        <p className="text-[11px] truncate font-medium">{file.name}</p>
+                        <p className="text-[10px] text-white/70 font-mono">
+                          {formatFileSize(file.size)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          /* Empty State */
+          <div className="rounded-2xl border border-dashed border-border/80 p-12 text-center bg-card/40 flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-muted/60 text-muted-foreground flex items-center justify-center mb-4">
+              <ImageIcon className="w-7 h-7" />
+            </div>
+
+            <h3 className="text-base font-semibold text-foreground mb-1">
+              Chưa có tệp nào được tải lên
+            </h3>
+
+            <p className="text-xs text-muted-foreground max-w-sm mb-4">
+              Hãy kéo thả ảnh hoặc video vào khung bên trên để bắt đầu điều chỉnh watermark và xuất hàng loạt.
+            </p>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const el = document.querySelector('input[type="file"]') as HTMLInputElement;
+                el?.click();
+              }}
+              className="text-xs"
+            >
+              Chọn tệp ngay
+            </Button>
+          </div>
+        )}
+
+        {/* Dialog Handle File */}
+        <DialogHandleFile
+          files={files}
+          isOpen={isOpen}
+          close={() => setIsOpen(false)}
+          chooseWM={waterMark}
+        />
+
+        {/* Alert when clicking watermark without files */}
+        {isOpenAlert && (
+          <AlertShow close={() => setIsOpenAlert(false)} isOpen={isOpenAlert} />
+        )}
+      </div>
     </main>
   );
 }

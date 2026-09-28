@@ -1,11 +1,5 @@
-type DialogProps = {
-  files: { file: File; preview: string }[];
-  isOpen: boolean;
-  close: () => void;
-  chooseWM?: File;
-};
+import { DialogHandleFileProps, AlertShowProps, MediaFileItem } from "./watermark";
 
-type AlertProps = {
-  isOpen: boolean;
-  close: () => void;
-};
+export type DialogProps = DialogHandleFileProps;
+export type AlertProps = AlertShowProps;
+export type FileItem = MediaFileItem;
