@@ -3,6 +3,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -70,6 +71,12 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
+// requestVideoFrameCallback is not yet in every TS DOM lib version
+type VideoElementWithFrameCallback = HTMLVideoElement & {
+  requestVideoFrameCallback?: (callback: () => void) => number;
+  cancelVideoFrameCallback?: (handle: number) => void;
+};
+
 const PRESET_FONTS = [
   { id: "Outfit, sans-serif", name: "Outfit (Hiện đại)" },
   { id: "Inter, sans-serif", name: "Inter (Tối giản)" },
@@ -111,8 +118,17 @@ export default function DialogHandleFile({
     (currentFile ? currentFile.type.startsWith("video/") : false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  // Radix Dialog mounts its Portal content one commit AFTER `open` becomes true,
+  // so `videoRef.current` is still null when effects first run on open.
+  // Tracking the node in state re-triggers the load effect once it is mounted.
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const setVideoNode = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    setVideoElement(node);
+  }, []);
 
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [watermark, setWatermark] = useState<HTMLImageElement | null>(null);
@@ -364,6 +380,13 @@ export default function DialogHandleFile({
     currentConfig,
   ]);
 
+  // Always-fresh reference for native event listeners / frame loops (avoids stale closures
+  // and avoids re-subscribing listeners every time a control changes)
+  const drawPreviewRef = useRef(drawPreview);
+  useEffect(() => {
+    drawPreviewRef.current = drawPreview;
+  }, [drawPreview]);
+
   const imageCacheRef = useRef<Map<number, HTMLImageElement>>(new Map());
 
   // Helper to preload an image by index
@@ -464,74 +487,103 @@ export default function DialogHandleFile({
         img.src = currentItem.preview;
       }
     } else {
-      // For video
+      // For video: size the canvas as soon as metadata is known, but only hide the
+      // loader once the first frame is decoded so the preview never appears blank.
       setLoading(true);
-      const videoElement = videoRef.current;
-      if (videoElement) {
+      if (!videoElement) return; // Effect re-runs when the <video> node mounts
+
+      const handleMetadata = () => {
+        setOriginalDimensions({
+          width: videoElement.videoWidth,
+          height: videoElement.videoHeight,
+        });
+        setDuration(videoElement.duration || 0);
+
+        const { width, height } = calculateCanvasSize(
+          videoElement.videoWidth,
+          videoElement.videoHeight
+        );
+
+        if (canvasRef.current) {
+          canvasRef.current.width = width;
+          canvasRef.current.height = height;
+        }
+      };
+
+      // First frame decoded -> flipping `loading` triggers the paused redraw effect below
+      const handleFirstFrame = () => setLoading(false);
+
+      // Paint the exact frame once a seek has finished decoding
+      const handleSeeked = () => drawPreviewRef.current();
+
+      const handleError = () => {
+        setLoading(false);
+        console.error("Failed to load video");
+      };
+
+      videoElement.addEventListener("loadedmetadata", handleMetadata);
+      videoElement.addEventListener("loadeddata", handleFirstFrame);
+      videoElement.addEventListener("canplay", handleFirstFrame);
+      videoElement.addEventListener("seeked", handleSeeked);
+      videoElement.addEventListener("error", handleError);
+
+      if (videoElement.src !== currentItem.preview) {
         videoElement.src = currentItem.preview;
-
-        const handleMetadata = () => {
-          setOriginalDimensions({
-            width: videoElement.videoWidth,
-            height: videoElement.videoHeight,
-          });
-          setDuration(videoElement.duration || 0);
-
-          const { width, height } = calculateCanvasSize(
-            videoElement.videoWidth,
-            videoElement.videoHeight
-          );
-
-          if (canvasRef.current) {
-            canvasRef.current.width = width;
-            canvasRef.current.height = height;
-          }
-          setLoading(false);
-        };
-
-        const handleError = () => {
-          setLoading(false);
-          console.error("Failed to load video");
-        };
-
-        videoElement.onloadedmetadata = handleMetadata;
-        videoElement.onerror = handleError;
+      } else {
+        // Same source already attached: events may have fired already
+        if (videoElement.readyState >= 1) handleMetadata();
+        if (videoElement.readyState >= 2) handleFirstFrame();
       }
+
+      return () => {
+        videoElement.pause();
+        videoElement.removeEventListener("loadedmetadata", handleMetadata);
+        videoElement.removeEventListener("loadeddata", handleFirstFrame);
+        videoElement.removeEventListener("canplay", handleFirstFrame);
+        videoElement.removeEventListener("seeked", handleSeeked);
+        videoElement.removeEventListener("error", handleError);
+      };
     }
-  }, [currentIndex, isOpen, isVideo, currentItem, calculateCanvasSize]);
+  }, [currentIndex, isOpen, isVideo, currentItem, calculateCanvasSize, videoElement]);
 
-  // Video playback animation loop for canvas preview
+  // Playback render loop: paint only when the decoder delivers a new frame.
+  // No React state is updated per frame (currentTime is synced via `timeupdate`).
   useEffect(() => {
-    if (!isVideo || !videoRef.current) return;
-    if (mode === "image" && !watermark) return;
+    const video = videoRef.current as VideoElementWithFrameCallback | null;
+    if (!isVideo || !isPlaying || !video) return;
 
-    let animId: number;
+    const requestFrame = video.requestVideoFrameCallback?.bind(video);
+    const cancelFrame = video.cancelVideoFrameCallback?.bind(video);
+    let rafId = 0;
+    let frameCallbackId = 0;
+    let isActive = true;
 
-    const loop = () => {
-      drawPreview();
-      if (videoRef.current) {
-        setCurrentTime(videoRef.current.currentTime);
+    const renderFrame = () => {
+      if (!isActive) return;
+      drawPreviewRef.current();
+      if (requestFrame) {
+        frameCallbackId = requestFrame(renderFrame);
+      } else {
+        rafId = requestAnimationFrame(renderFrame);
       }
-      animId = requestAnimationFrame(loop);
     };
 
-    if (isPlaying) {
-      animId = requestAnimationFrame(loop);
-    } else {
-      drawPreview();
-    }
+    renderFrame();
 
     return () => {
-      cancelAnimationFrame(animId);
+      isActive = false;
+      cancelAnimationFrame(rafId);
+      if (cancelFrame && frameCallbackId) cancelFrame(frameCallbackId);
     };
-  }, [isVideo, isPlaying, drawPreview, watermark, mode]);
+  }, [isVideo, isPlaying]);
 
-  // Re-draw preview when controls change while video is paused or media is image
+  // Re-draw preview when controls change while video is paused or media is image,
+  // and as soon as media finishes loading (first video frame becomes available)
   useEffect(() => {
-    if (!isPlaying) {
+    if (!isPlaying && !loading) {
       drawPreview();
     }
-  }, [isPlaying, drawPreview]);
+  }, [isPlaying, loading, drawPreview]);
 
   // Helper to convert pointer/touch event into internal Canvas coordinate space
   const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -683,9 +735,7 @@ export default function DialogHandleFile({
     if (!videoRef.current) return;
     videoRef.current.currentTime = newTime;
     setCurrentTime(newTime);
-    if (!isPlaying) {
-      drawPreview();
-    }
+    // Frame is painted by the `seeked` listener once the new frame is decoded
   };
 
   // Video mute toggle
@@ -838,9 +888,9 @@ export default function DialogHandleFile({
                 <Sparkles className="h-5 w-5 text-primary" />
                 <span>Studio Chỉnh Sửa Watermark</span>
               </DialogTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
                 Xem trước thời gian thực và tùy biến con dấu bản quyền cho ảnh & video
-              </p>
+              </DialogDescription>
             </div>
 
             {/* Mode Switch Tabs */}
@@ -1214,14 +1264,18 @@ export default function DialogHandleFile({
                 </div>
               )}
 
-              {/* Hidden video element used as canvas frame source */}
+              {/* Visually hidden (but still rendered) video used as canvas frame source.
+                  Avoiding display:none keeps frame decoding & requestVideoFrameCallback
+                  active in every browser (notably Safari). */}
               <video
-                ref={videoRef}
-                className="hidden"
+                ref={setVideoNode}
+                aria-hidden="true"
+                className="absolute top-0 left-0 w-px h-px opacity-0 pointer-events-none"
                 playsInline
                 muted={isMuted}
                 loop
                 preload="auto"
+                onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                 onEnded={() => setIsPlaying(false)}
               />
 

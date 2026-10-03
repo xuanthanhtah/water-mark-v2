@@ -286,9 +286,26 @@ export default function Home() {
                       ) : (
                         <div className="relative w-full h-full">
                           <video
-                            src={preview}
+                            src={`${preview}#t=0.1`}
                             className="w-full h-full object-cover"
+                            preload="metadata"
+                            muted
+                            playsInline
+                            onLoadedMetadata={() =>
+                              setLoadedStates((prev) => {
+                                const updated = [...prev];
+                                updated[index] = true;
+                                return updated;
+                              })
+                            }
                             onLoadedData={() =>
+                              setLoadedStates((prev) => {
+                                const updated = [...prev];
+                                updated[index] = true;
+                                return updated;
+                              })
+                            }
+                            onError={() =>
                               setLoadedStates((prev) => {
                                 const updated = [...prev];
                                 updated[index] = true;
